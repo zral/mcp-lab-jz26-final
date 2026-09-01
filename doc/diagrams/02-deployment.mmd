@@ -1,0 +1,37 @@
+%%{init: {'theme':'dark'}}%%
+%% Deployment - Docker containers, ports and volumes
+%% Verified against docker-compose.yml on 2026-08-23.
+%% These are compose service names (used as internal DNS),
+%% not container_name (travel-weather-*).
+flowchart TD
+    host["Host machine<br/>localhost ports:<br/>8080, 8001, 8000"]
+    web["Web container<br/>agent-web<br/>Port 8080"]
+    agent["Agent container<br/>travel-agent<br/>Port 8001"]
+    mcp["MCP container<br/>mcp-server<br/>Port 8000"]
+    vlogs["Volume: logs<br/>travel-weather-logs"]
+    vdata["Volume: agent-data<br/>travel-weather-agent-data"]
+    db["SQLite DB<br/>/data/conversations.db"]
+
+    host -.->|"Port mapping"| web
+    host -.->|"Port mapping"| agent
+    host -.->|"Port mapping"| mcp
+
+    web -->|"http://travel-agent:8001"| agent
+    agent -->|"http://mcp-server:8000"| mcp
+
+    web -.->|"Log"| vlogs
+    agent -.->|"Log"| vlogs
+    mcp -.->|"Log"| vlogs
+
+    agent -.->|"Mount"| vdata
+    vdata -.->|"Persist"| db
+
+    classDef hostbox fill:#eef3f8,stroke:#000,color:#000
+    classDef container fill:#90caf9,stroke:#000,color:#000
+    classDef volume fill:#e1bee7,stroke:#000,color:#000
+    classDef store fill:#f8bbd0,stroke:#000,color:#000
+
+    class host hostbox
+    class web,agent,mcp container
+    class vlogs,vdata volume
+    class db store

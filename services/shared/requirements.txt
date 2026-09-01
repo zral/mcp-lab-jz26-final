@@ -1,0 +1,7 @@
+# NOT USED.
+#
+# No Dockerfile or compose service references this file. Each service
+# declares only what it imports, in its own requirements.txt.
+#
+# Kept as a marker so nobody re-creates a shared file and reintroduces the
+# 18-packages-everywhere problem.

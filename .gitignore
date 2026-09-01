@@ -1,0 +1,164 @@
+# .gitignore for Travel Weather MCP Project
+
+# Environment variables and secrets
+# Anything .env-ish holds real keys. A bare `.env` rule missed `.env copy`
+# (what the Finder/IDE names a duplicate) and `.env.bak-*`, so a `git add -A`
+# would have committed live credentials.
+.env
+.env.*
+.env[ -]*
+!.env.example
+.env.local
+.env.production
+.env.development
+*.key
+
+# Python cache og bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribusjon / pakking
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logfiler  
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / dekning rapporter
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# Pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath
+*.sage.py
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Rope
+.ropeproject
+
+# mkdocs
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# IDE filer
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS genererte filer
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logfiler
+*.log
+logs/
+log/
+
+# Docker
+.dockerignore
+
+# MCP spesifikke filer
+mcp.json
+.mcp/
+
+# API test filer
+test_responses/
+api_test_data/
+
+# Temporary filer
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Backup filer
+*.bak
+*.backup
+~$*.pptx
+site/
+
+# Claude Code lokale innstillinger
+.claude/settings.local.json
+
+# Working notes - deliberately kept out of the repo
+doc/mcp-2026-07-28-gap.md
+
+# Local instructor context - not part of the participant repo
+CLAUDE.md
+doc/speaker-notes.md

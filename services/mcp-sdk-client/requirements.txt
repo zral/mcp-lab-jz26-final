@@ -1,0 +1,9 @@
+# Third-party compliance client.
+#
+# The point of this service is that it is NOT our code: the official SDK
+# talks to our hand-rolled server and either agrees or does not.
+#
+# Verified working on python:3.14-slim.
+
+mcp==2.0.0
+httpx==0.28.1

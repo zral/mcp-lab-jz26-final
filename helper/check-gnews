@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+#
+# Is Google News RSS usable from THIS machine?
+#
+#     ./helper/check-gnews
+#
+# WHY
+# ---
+# Lab 3 reads Google News RSS: no key, any topic, and it parses with the
+# standard library. This checks that the source is actually reachable.
+#
+# The catch is where the call comes FROM. This works from a home connection.
+# Codespaces runs in Azure, and Google treats datacenter ranges more harshly
+# than consumer ones. That is the machine participants actually get, so it is
+# the machine the test has to run on.
+#
+# Failure is not always an HTTP error. The interesting case is a 200 that
+# contains a consent page instead of XML, or valid XML with zero items - a
+# soft block that looks like success until someone counts.
+
+set -u
+URL="https://news.google.com/rss/search?q=oslo+travel&hl=en-US&gl=US&ceid=US:en"
+OUT=$(mktemp)
+trap 'rm -f "$OUT"' EXIT
+
+echo "egress IP : $(curl -sS --max-time 10 https://api.ipify.org 2>/dev/null || echo unknown)"
+
+code=$(curl -sSL -o "$OUT" -w '%{http_code}' --max-time 20 \
+       -H 'User-Agent: mcp-workshop/1.0' "$URL" 2>/dev/null)
+echo "status    : HTTP $code, $(wc -c <"$OUT" | tr -d ' ') bytes"
+
+python3 - "$OUT" <<'PY'
+import sys, xml.etree.ElementTree as ET
+
+path = sys.argv[1]
+try:
+    items = ET.parse(path).getroot().findall(".//item")
+except ET.ParseError:
+    head = open(path, errors="replace").read(300).replace("\n", " ")
+    print("result    : NOT XML - consent page, captcha or block")
+    print("            " + head[:200])
+    sys.exit(1)
+
+if not items:
+    print("result    : valid XML but ZERO items - soft block")
+    sys.exit(1)
+
+print(f"result    : {len(items)} articles")
+for i in items[:3]:
+    print(f"            - {(i.findtext('title') or '')[:64]}  [{i.findtext('source')}]")
+sys.exit(0)
+PY
+rc=$?
+
+echo
+if [ $rc -eq 0 ]; then
+    echo "USABLE - Google News RSS works from here."
+else
+    echo "BLOCKED - lab 3 has no working source. Verified alternative:"
+    echo "  https://api.spaceflightnewsapi.net/v4/articles/?search=mars&limit=3"
+fi
+exit $rc

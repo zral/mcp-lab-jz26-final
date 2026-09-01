@@ -1,0 +1,147 @@
+services:
+  # MCP Server - HTTP API for tools
+  mcp-server:
+    build:
+      context: ./services/mcp-server
+      dockerfile: Dockerfile
+    container_name: travel-weather-mcp
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - travel-weather-network
+    volumes:
+      - logs:/app/logs
+    ports:
+      - "8000:8000"  # HTTP API for MCP tools
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Agent Service - AI logic
+  travel-agent:
+    build:
+      context: ./services/agent
+      dockerfile: Dockerfile
+    container_name: travel-weather-agent
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gemini-3.5-flash-lite}
+      - PYTHONUNBUFFERED=1
+      - MCP_SERVER_URL=http://mcp-server:8000
+    restart: unless-stopped
+    depends_on:
+      - mcp-server
+    networks:
+      - travel-weather-network
+    volumes:
+      - logs:/app/logs
+      - agent-data:/data  # Persistent database storage
+    ports:
+      - "8001:8001"  # Agent HTTP API
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Web interface - pure frontend
+  agent-web:
+    build:
+      context: ./services/web
+      dockerfile: Dockerfile
+    container_name: travel-weather-web
+    environment:
+      - AGENT_SERVICE_URL=http://travel-agent:8001
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    depends_on:
+      - travel-agent
+    networks:
+      - travel-weather-network
+    ports:
+      - "8080:8080"  # Web interface port
+    volumes:
+      - logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Database Viewer - Datasette for SQLite inspection (optional)
+  datasette:
+    # Pinned, like every other image here. `latest` was 0.65.2 at the time of
+    # writing; an unpinned tag is exactly how a build drifts between the day we
+    # test it and the day participants run it.
+    image: datasetteproject/datasette:0.65.2
+    container_name: travel-weather-datasette
+    restart: unless-stopped
+    # Behind a profile on purpose: this image is 324MB, the largest in the
+    # stack, and most participants never open port 8090. Without the profile
+    # `docker compose up` pulls it for everyone. `make db-view` starts it on
+    # demand, and `make db-shell` needs no container at all.
+    profiles: ["datasette"]
+    networks:
+      - travel-weather-network
+    volumes:
+      - agent-data:/data:ro  # Read-only access to database
+    ports:
+      - "8090:8001"  # Datasette web interface (internal port 8001, external 8090)
+    depends_on:
+      - travel-agent
+    command: ["datasette", "serve", "/data/conversations.db", "-h", "0.0.0.0", "-p", "8001"]
+    healthcheck:
+      # The datasette image has no curl - only python. A curl-based check
+      # fails to *execute*, which reads as unhealthy forever even though the
+      # service is fine, and `make status` then shows red for no reason.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # MCP SDK Client - Third-party compliance test (optional)
+  mcp-sdk-client:
+    build:
+      context: ./services/mcp-sdk-client
+      dockerfile: Dockerfile
+    container_name: travel-weather-mcp-sdk-client
+    environment:
+      - MCP_SERVER_URL=http://mcp-server:8000
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    networks:
+      - travel-weather-network
+    profiles:
+      - compliance-test  # Only run with: docker compose --profile compliance-test up
+    command: ["python", "test_mcp_sdk.py"]
+
+networks:
+  travel-weather-network:
+    driver: bridge
+    name: travel-weather-network
+
+volumes:
+  # Deliberately NOT given an explicit `name:`. A global name survives the
+  # project it was created in, so compose then warns on every `up`:
+  #
+  #   volume "travel-weather-logs" already exists but was created for
+  #   project "mcp-workshop" (expected "mcp-lab-jz26-final")
+  #
+  # Without `name:` the volumes are project-scoped - mcp-lab-jz26-final_logs -
+  # and two checkouts can never collide over them. `make clean` still
+  # removes the old global ones for anyone upgrading.
+  logs:
+    driver: local
+  agent-data:
+    driver: local  # Persistent storage for conversation database
+

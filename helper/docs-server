@@ -1,0 +1,42 @@
+#!/bin/sh
+# Serve doc/ and rebuild the deck whenever a slide source changes.
+#
+# There is no fswatch or entr in Codespaces, and adding a dependency for this
+# would be one more thing to go wrong on workshop morning, so this polls. Two
+# seconds is fast enough for editing slides and cheap enough to ignore.
+set -eu
+
+PORT="${PORT:-8097}"
+cd "$(dirname "$0")/.."
+
+python3 -m http.server "$PORT" --bind 127.0.0.1 --directory doc &
+SERVER_PID=$!
+trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT INT TERM
+
+echo "Serving doc/ on http://127.0.0.1:$PORT"
+echo "  deck: http://127.0.0.1:$PORT/ws-pres-cut.html"
+echo "Watching for changes. Reload the browser after a rebuild. Ctrl-C to stop."
+
+# Checksum, not mtime. `ls -l` prints a timestamp accurate only to the minute,
+# so fixing a typo that does not change the byte count within the same minute
+# would produce an identical stamp - and the watcher would never rebuild that
+# edit, or any edit after it. Silently serving a stale deck while you polish
+# slides is the one failure this script must not have. cksum is POSIX and the
+# files are tiny.
+stamp() {
+	cksum doc/ws-pres-cut.md doc/diagrams/*.mmd 2>/dev/null
+}
+
+last_all=$(stamp)
+
+while sleep 2; do
+	now_all=$(stamp)
+	[ "$now_all" = "$last_all" ] && continue
+
+	echo "=== source changed - rebuilding ==="
+	make slides || echo "!!! build failed - the served HTML is unchanged"
+
+	# Re-stamp after building: rendering diagrams rewrites files we watch.
+	last_all=$(stamp)
+	echo "=== done, reload the browser ==="
+done

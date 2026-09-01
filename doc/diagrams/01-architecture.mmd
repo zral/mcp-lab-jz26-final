@@ -1,0 +1,32 @@
+%%{init: {'theme':'dark'}}%%
+%% System architecture - MCP Travel Weather
+%% Weather data comes from yr.no (api.met.no), NOT OpenWeatherMap.
+%% The LLM is bound by env vars only - see services/agent/app.py.
+flowchart TD
+    browser["Browser"]
+    web["Web Service<br/>Port 8080<br/>FastAPI + Jinja2"]
+    agent["Agent Service<br/>Port 8001<br/>LLM via OpenAI-compatible API"]
+    mcp["MCP Server<br/>Port 8000<br/>MCP endpoint: POST /message"]
+    llm["Google AI Studio<br/>Gemini<br/>OpenAI-compatible endpoint"]
+    yr["yr.no - api.met.no<br/>Locationforecast 2.0<br/>no API key"]
+    nominatim["Nominatim API<br/>OpenStreetMap"]
+
+    browser -->|"HTTP requests"| web
+    web -->|"POST /query"| agent
+    agent -->|"JSON-RPC tools/list"| mcp
+    agent -->|"JSON-RPC tools/call"| mcp
+    agent -->|"Chat Completions"| llm
+    mcp -->|"Weather data"| yr
+    mcp -->|"Geocoding"| nominatim
+
+    classDef client fill:#eef3f8,stroke:#000,color:#000
+    classDef svc fill:#90caf9,stroke:#000,color:#000
+    classDef agentbox fill:#a5d6a7,stroke:#000,color:#000
+    classDef mcpbox fill:#ffd54f,stroke:#000,color:#000
+    classDef ext fill:#ffe0b2,stroke:#000,color:#000
+
+    class browser client
+    class web svc
+    class agent agentbox
+    class mcp mcpbox
+    class llm,yr,nominatim ext

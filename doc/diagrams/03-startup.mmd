@@ -1,0 +1,35 @@
+%%{init: {'theme':'dark'}}%%
+%% Data flow - Start-up
+%% Corrected 2026-08-23:
+%%  - removed "store endpoint mappings" (tool_endpoints was dead code)
+%%  - clarified that the session is the agent's conversation session,
+%%    not an MCP session (2026-07-28 has no protocol sessions)
+%%  - added the required headers and _meta on tools/list
+sequenceDiagram
+    autonumber
+    participant D as Docker
+    participant M as MCP Server
+    participant A as Agent Service
+    participant W as Web Service
+
+    D->>M: Start container (depends_on: none)
+    Note over M: Initialise FastAPI<br/>Load API keys
+    M-->>D: Health: ready
+
+    D->>A: Start container (depends_on: mcp-server)
+    Note over A: Initialise FastAPI<br/>Create LLM client<br/>Initialise SQLite DB
+
+    A->>M: POST /message - tools/list<br/>MCP-Protocol-Version: 2026-07-28<br/>Mcp-Method: tools/list<br/>params._meta: protocolVersion + clientCapabilities
+    M-->>A: Tools manifest<br/>resultType, ttlMs, cacheScope
+    Note over A: Convert MCP tools to<br/>OpenAI function calling format
+
+    Note over A: Create conversation session (SQLite)<br/>NB: application level, not MCP
+    A-->>D: Health: ready
+
+    D->>W: Start container (depends_on: travel-agent)
+    Note over W: Initialise FastAPI<br/>Load templates
+    W->>A: GET /health
+    A-->>W: Status: healthy
+    W-->>D: Health: ready
+
+    Note over D,W: All services ready - system operational

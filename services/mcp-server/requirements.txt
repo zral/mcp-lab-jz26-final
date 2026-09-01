@@ -1,0 +1,26 @@
+# Python dependencies for the MCP Travel Weather workshop
+#
+# PINNED, not `>=`. That is deliberate.
+#
+# This repo used to declare `fastapi>=0.104.0` with no upper bound. A fresh
+# build then pulled Starlette 1.6, which had removed the old
+# TemplateResponse(name, context) signature, and every page answered HTTP 500.
+# Nobody had touched the code.
+#
+# Participants fork this on a fixed date. Pinning means everyone gets the
+# build we tested, and it cannot drift between now and then.
+#
+# Only what this service actually imports is listed. The previous file
+# declared 18 packages for every service, including `mcp[cli]` in three that
+# never imported it, plus black, mypy, flake8 and asyncio-mqtt. Unused
+# dependencies are attack surface and Dependabot noise, nothing else.
+#
+# Verified working on python:3.14-slim.
+
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+httpx==0.28.1
+pydantic==2.13.4
+
+# Protocol tests (services/mcp-server/test_mcp_protocol.py)
+pytest==9.1.1

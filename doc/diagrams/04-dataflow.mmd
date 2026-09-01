@@ -1,0 +1,40 @@
+%%{init: {'theme':'dark'}}%%
+%% Data flow - Request
+%% Corrected 2026-08-23:
+%%  - OpenWeatherMap -> yr.no (api.met.no)
+%%  - merged two weather calls into one: the code makes ONE call to
+%%    locationforecast/2.0/compact, and both current and forecast are
+%%    derived from the same timeseries response
+%%  - added the required headers and _meta on tools/call
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant W as Web Service (8080)
+    participant A as Agent Service (8001)
+    participant M as MCP Server (8000)
+    participant O as LLM (Gemini)
+    participant Y as yr.no (api.met.no)
+
+    U->>W: What is the weather in Oslo?
+    W->>A: POST /query
+    Note over A: Load conversation history
+
+    A->>O: Chat completion with tools
+    O-->>A: Tool call: get_weather_forecast(Oslo)
+
+    A->>M: POST /message - tools/call<br/>MCP-Protocol-Version: 2026-07-28<br/>Mcp-Method: tools/call<br/>Mcp-Name: get_weather_forecast<br/>params._meta: protocolVersion + clientCapabilities
+
+    Note over M: Geocode via Nominatim
+    M->>Y: GET locationforecast/2.0/compact<br/>lat, lon
+    Y-->>M: timeseries - one response
+    Note over M: Derive current weather AND<br/>5-day forecast from one timeseries
+
+    M-->>A: MCP response<br/>content, structuredContent, resultType
+    Note over A: Parse structuredContent
+
+    A->>O: Tool result + ask for an answer
+    O-->>A: Natural-language response
+    Note over A: Persist to the conversation DB
+
+    A-->>W: JSON response
+    W-->>U: Render the answer

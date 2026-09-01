@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+#
+# mcp-curl — send a JSON-RPC request to an MCP endpoint, with the headers
+#            that MCP 2026-07-28 requires.
+#
+# Since this revision the protocol is stateless: every request must carry the
+# protocol version and the client capabilities itself, in params._meta, and
+# mirror selected fields into HTTP headers so intermediaries can route without
+# parsing the body.
+#
+# That is four headers and a _meta block on every single call. Typing that by
+# hand forty times during a workshop is how you end up debugging your own
+# typos instead of the protocol. Hence this wrapper.
+#
+# It is deliberately small — read it. The whole point is that there is no
+# magic here, just the boilerplate the spec asks for.
+#
+# Usage:
+#   mcp-curl <method> [json-params]
+#
+# Examples:
+#   mcp-curl server/discover
+#   mcp-curl tools/list
+#   mcp-curl tools/call '{"name":"get_weather_forecast","arguments":{"location":"Oslo"}}'
+#
+# Environment:
+#   MCP_URL       endpoint, default http://localhost:8000/message
+#   MCP_VERSION   protocol version to claim, default 2026-07-28
+#   MCP_RAW       set to 1 to skip pretty-printing and show raw output
+#   MCP_ORIGIN    send an Origin header (to see the 403 path)
+#
+set -euo pipefail
+
+MCP_URL="${MCP_URL:-http://localhost:8000/message}"
+MCP_VERSION="${MCP_VERSION:-2026-07-28}"
+
+method="${1:-}"
+params="${2:-}"
+[ -z "$params" ] && params='{}'
+
+if [ -z "$method" ]; then
+    sed -n '3,30p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+fi
+
+# Build the body: the caller's params, plus the _meta block the spec requires.
+body=$(MCP_VERSION="$MCP_VERSION" method="$method" params="$params" python3 - <<'PY'
+import json, os, sys
+try:
+    params = json.loads(os.environ["params"])
+except json.JSONDecodeError as e:
+    sys.exit(f"mcp-curl: params is not valid JSON: {e}")
+
+version = os.environ["MCP_VERSION"]
+params["_meta"] = {
+    "io.modelcontextprotocol/protocolVersion": version,
+    "io.modelcontextprotocol/clientCapabilities": {},
+    "io.modelcontextprotocol/clientInfo": {"name": "mcp-curl", "version": "1.0.0"},
+}
+print(json.dumps({"jsonrpc": "2.0", "id": 1,
+                  "method": os.environ["method"], "params": params}))
+PY
+)
+
+# The mirrored headers. Mcp-Name only applies to methods that carry a name.
+headers=(
+    -H "Content-Type: application/json"
+    -H "Accept: application/json, text/event-stream"
+    -H "MCP-Protocol-Version: $MCP_VERSION"
+    -H "Mcp-Method: $method"
+)
+
+name=$(printf '%s' "$body" | python3 -c '
+import json, sys
+p = json.load(sys.stdin).get("params", {})
+print(p.get("name") or p.get("uri") or "")
+')
+if [ -n "$name" ]; then
+    headers+=( -H "Mcp-Name: $name" )
+fi
+
+if [ -n "${MCP_ORIGIN:-}" ]; then
+    headers+=( -H "Origin: $MCP_ORIGIN" )
+fi
+
+# -w shows the status code, which matters here: this revision pairs JSON-RPC
+# error codes with HTTP status codes, so 404 and 400 are part of the answer.
+if [ "${MCP_RAW:-}" = "1" ]; then
+    curl -sS -X POST "$MCP_URL" "${headers[@]}" -d "$body" -w '\nHTTP %{http_code}\n'
+else
+    out=$(curl -sS -X POST "$MCP_URL" "${headers[@]}" -d "$body" -w '\n%{http_code}')
+    code="${out##*$'\n'}"
+    json="${out%$'\n'*}"
+    printf '%s\n' "$json" | python3 -m json.tool 2>/dev/null || printf '%s\n' "$json"
+    printf 'HTTP %s\n' "$code"
+fi
